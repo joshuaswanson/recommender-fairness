@@ -10,21 +10,24 @@ Detailed results from the SEM analysis. For methodology, see [METHODOLOGY.md](ME
 
 ### Item Correlations by Construct
 
-| System Quality | Service Quality |
-|:--------------:|:---------------:|
-| ![](../figures/system_quality_correlation.png) | ![](../figures/service_quality_correlation.png) |
+<p align="center">
+  <img src="../figures/system_quality_correlation.png" width="45%">
+  <img src="../figures/service_quality_correlation.png" width="45%">
+</p>
 
-| Perceived Fairness | Perceived Ease of Use |
-|:------------------:|:---------------------:|
-| ![](../figures/perceived_fairness_correlation.png) | ![](../figures/perceived_ease_of_use_correlation.png) |
+<p align="center">
+  <img src="../figures/perceived_fairness_correlation.png" width="45%">
+  <img src="../figures/perceived_ease_of_use_correlation.png" width="45%">
+</p>
 
-| Perceived Usefulness | Attitude Toward Use |
-|:--------------------:|:-------------------:|
-| ![](../figures/perceived_usefulness_correlation.png) | ![](../figures/attitude_toward_use_correlation.png) |
+<p align="center">
+  <img src="../figures/perceived_usefulness_correlation.png" width="45%">
+  <img src="../figures/attitude_toward_use_correlation.png" width="45%">
+</p>
 
-| Behavioral Intention |
-|:--------------------:|
-| ![](../figures/behavioral_intention_correlation.png) |
+<p align="center">
+  <img src="../figures/behavioral_intention_correlation.png" width="45%">
+</p>
 
 ## Path Coefficients
 
