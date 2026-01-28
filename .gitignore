@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.nb.html
+*.rds
+renv/
+.Rprofile
+
+# Jupyter
+.ipynb_checkpoints/
+
