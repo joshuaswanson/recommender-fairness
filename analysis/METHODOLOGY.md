@@ -42,7 +42,7 @@ Items are removed based on **psychometric criteria only**:
 | Item-total correlation | >= 0.3 | Items should correlate with their construct |
 | Factor loading | >= 0.4 | Items should load meaningfully on their factor |
 
-Items are **never** removed based on whether they produce significant path coefficients. This prevents p-hacking and ensures methodological rigor.
+Items are not removed based on whether they produce significant path coefficients.
 
 ## Step 1: Reliability Analysis
 
@@ -83,16 +83,6 @@ For each construct:
 5. Compare model fit (if both models converge)
 
 **Note**: The Modified FAIR model (which combines Perceived Ease of Use and Perceived Usefulness into "Perceived Effectiveness") may not converge with all datasets. If it fails to converge, only the standard FAIR model results are reported.
-
-## Reporting Standards
-
-All results are reported transparently:
-
-- Significant and non-significant paths
-- Model fit indices (even if below thresholds)
-- Limitations of the analysis
-
-This approach prioritizes scientific integrity over achieving "positive" results.
 
 ## Software
 
