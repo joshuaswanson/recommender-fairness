@@ -70,6 +70,30 @@ The core fairness hypotheses were not supported:
 
 The below-threshold CFI/TLI values suggest the model structure may need refinement, though RMSEA and SRMR are acceptable.
 
+## Correlation Matrices
+
+### Inter-Construct Correlations
+
+![Construct Correlations](figures/construct_correlations.png)
+
+### Item Correlations by Construct
+
+| System Quality | Service Quality |
+|:--------------:|:---------------:|
+| ![](figures/system_quality_correlation.png) | ![](figures/service_quality_correlation.png) |
+
+| Perceived Fairness | Perceived Ease of Use |
+|:------------------:|:---------------------:|
+| ![](figures/perceived_fairness_correlation.png) | ![](figures/perceived_ease_of_use_correlation.png) |
+
+| Perceived Usefulness | Attitude Toward Use |
+|:--------------------:|:-------------------:|
+| ![](figures/perceived_usefulness_correlation.png) | ![](figures/attitude_toward_use_correlation.png) |
+
+| Behavioral Intention |
+|:--------------------:|
+| ![](figures/behavioral_intention_correlation.png) |
+
 ## Repository Structure
 
 ```
