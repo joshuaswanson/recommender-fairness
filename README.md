@@ -84,10 +84,12 @@ analysis/
   METHODOLOGY.md          Detailed explanation of the analysis approach
 
 figures/
-  sem_diagram.png         Full SEM path diagram with standardized coefficients
-  path_coefficients.png   Bar chart of all path coefficients with 95% CIs
-  hypothesis_results.png  Hypothesis testing summary
-  model_fit.png           Model fit indices comparison
+  sem_diagram.png              Full SEM path diagram with standardized coefficients
+  path_coefficients.png        Bar chart of all path coefficients with 95% CIs
+  hypothesis_results.png       Hypothesis testing summary
+  model_fit.png                Model fit indices comparison
+  construct_correlations.png   Inter-construct correlation matrix
+  *_correlation.png            Item correlation matrices for each construct
 
 renv.lock                 R package lockfile (for reproducibility)
 ```
