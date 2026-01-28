@@ -10,7 +10,7 @@ Two-sided recommender systems (2SRS) like TikTok serve both content creators and
 
 We extended the Technology Acceptance Model (TAM) by adding **Perceived Fairness** as a construct, creating the "FAIR model":
 
-![SEM Diagram](figures/sem_diagram.png)
+![FAIR Model](figures/fair_model.png)
 
 ### Constructs
 
@@ -84,7 +84,7 @@ analysis/
   METHODOLOGY.md          Detailed explanation of the analysis approach
 
 figures/
-  sem_diagram.png              Full SEM path diagram with standardized coefficients
+  fair_model.png               FAIR model diagram with path coefficients
   path_coefficients.png        Bar chart of all path coefficients with 95% CIs
   hypothesis_results.png       Hypothesis testing summary
   model_fit.png                Model fit indices comparison
