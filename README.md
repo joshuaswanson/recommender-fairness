@@ -70,6 +70,10 @@ The core fairness hypotheses were not supported:
 
 The below-threshold CFI/TLI values suggest the model structure may need refinement, though RMSEA and SRMR are acceptable.
 
+### Modified FAIR Model
+
+We also tested a modified version combining Perceived Ease of Use and Perceived Usefulness into a single "Perceived Effectiveness" construct (6 constructs instead of 7). This model did not converge, so results are not reported.
+
 For detailed results including correlation matrices, see [analysis/RESULTS.md](analysis/RESULTS.md).
 
 ## Repository Structure
