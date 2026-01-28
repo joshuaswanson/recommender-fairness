@@ -11,22 +11,19 @@ Detailed results from the SEM analysis. For methodology, see [METHODOLOGY.md](ME
 ### Item Correlations by Construct
 
 <p align="center">
-  <img src="../figures/system_quality_correlation.png" width="45%">
-  <img src="../figures/service_quality_correlation.png" width="45%">
+  <img src="../figures/system_quality_correlation.png" width="49%"><img src="../figures/service_quality_correlation.png" width="49%">
 </p>
 
 <p align="center">
-  <img src="../figures/perceived_fairness_correlation.png" width="45%">
-  <img src="../figures/perceived_ease_of_use_correlation.png" width="45%">
+  <img src="../figures/perceived_fairness_correlation.png" width="49%"><img src="../figures/perceived_ease_of_use_correlation.png" width="49%">
 </p>
 
 <p align="center">
-  <img src="../figures/perceived_usefulness_correlation.png" width="45%">
-  <img src="../figures/attitude_toward_use_correlation.png" width="45%">
+  <img src="../figures/perceived_usefulness_correlation.png" width="49%"><img src="../figures/attitude_toward_use_correlation.png" width="49%">
 </p>
 
 <p align="center">
-  <img src="../figures/behavioral_intention_correlation.png" width="45%">
+  <img src="../figures/behavioral_intention_correlation.png" width="49%">
 </p>
 
 ## Path Coefficients
