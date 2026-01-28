@@ -1,0 +1,497 @@
+---
+title: "Step 3: Structural Equation Modeling"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This analysis fits the structural model (SEM) to test the hypothesized causal
+paths in the FAIR model. Results are reported regardless of statistical
+significance.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lavaan)
+library(semPlot)
+library(semTools)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Load Data
+
+```{r}
+constructs <- readRDS("constructs_final.rds")
+df_items <- readRDS("df_items.rds")
+
+construct_labels <- c(
+  system_quality = "System Quality",
+  service_quality = "Service Quality",
+  perceived_fairness = "Perceived Fairness",
+  perceived_ease_of_use = "Perceived Ease of Use",
+  perceived_usefulness = "Perceived Usefulness",
+  attitude_toward_use = "Attitude Toward Use",
+  behavioral_intention = "Behavioral Intention"
+)
+
+cat("Sample size:", nrow(df_items), "\n")
+cat("\nFinal constructs:\n")
+for (name in names(constructs)) {
+  cat("  ", construct_labels[name], ":", length(constructs[[name]]), "items\n")
+}
+```
+
+# Hypotheses
+
+Based on the FAIR model extending TAM:
+
+| # | Hypothesis | Path |
+|---|------------|------|
+| H1 | System quality -> Perceived fairness | sy.q -> p.f |
+| H2 | Service quality -> Perceived fairness | se.q -> p.f |
+| H3 | Perceived fairness -> Perceived usefulness | p.f -> p.u |
+| H4 | Perceived fairness -> Attitude | p.f -> a.t.u |
+| H5 | System quality -> Perceived ease of use | sy.q -> p.e.o.u |
+| H6 | Service quality -> Perceived ease of use | se.q -> p.e.o.u |
+| H7 | System quality -> Perceived usefulness | sy.q -> p.u |
+| H8 | Service quality -> Perceived usefulness | se.q -> p.u |
+| H9 | Perceived ease of use -> Perceived usefulness | p.e.o.u -> p.u |
+| H10 | Perceived ease of use -> Attitude | p.e.o.u -> a.t.u |
+| H11 | Perceived usefulness -> Attitude | p.u -> a.t.u |
+| H12 | Attitude -> Behavioral intention | a.t.u -> b.i |
+
+# FAIR Model (7 Constructs)
+
+## Model Specification
+
+```{r}
+build_sem_model <- function(constructs, structural_paths) {
+  # Measurement model
+  measurement <- sapply(names(constructs), function(name) {
+    items <- constructs[[name]]
+    paste0(name, " =~ ", paste(items, collapse = " + "))
+  })
+
+  paste(c(measurement, "", "# Structural paths", structural_paths), collapse = "\n")
+}
+
+fair_paths <- c(
+  "# Fairness paths (novel hypotheses)",
+  "perceived_fairness ~ system_quality + service_quality",
+  "",
+  "# TAM paths",
+  "perceived_ease_of_use ~ system_quality + service_quality",
+  "perceived_usefulness ~ system_quality + service_quality + perceived_fairness + perceived_ease_of_use",
+  "attitude_toward_use ~ perceived_fairness + perceived_ease_of_use + perceived_usefulness",
+  "behavioral_intention ~ attitude_toward_use"
+)
+
+fair_model <- build_sem_model(constructs, fair_paths)
+cat("FAIR Model Specification:\n\n")
+cat(fair_model)
+```
+
+## Fit Model
+
+```{r}
+fit_fair <- sem(
+  fair_model,
+  data = df_items,
+  std.lv = TRUE,
+  estimator = "MLM"
+)
+```
+
+## Model Fit
+
+```{r}
+fit_measures <- fitMeasures(fit_fair, c(
+  "chisq", "df", "pvalue",
+  "cfi", "tli", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper", "srmr"
+))
+
+fit_df <- data.frame(
+  Index = c("Chi-square", "df", "p-value", "CFI", "TLI", "RMSEA", "RMSEA 90% CI", "SRMR"),
+  Value = c(
+    round(fit_measures["chisq"], 2),
+    fit_measures["df"],
+    round(fit_measures["pvalue"], 4),
+    round(fit_measures["cfi"], 3),
+    round(fit_measures["tli"], 3),
+    round(fit_measures["rmsea"], 3),
+    paste0("[", round(fit_measures["rmsea.ci.lower"], 3), ", ",
+           round(fit_measures["rmsea.ci.upper"], 3), "]"),
+    round(fit_measures["srmr"], 3)
+  ),
+  Threshold = c("-", "-", "> 0.05", ">= 0.90", ">= 0.90", "<= 0.08", "-", "<= 0.08")
+)
+
+fit_df %>%
+  kable(caption = "FAIR Model Fit Indices") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Path Coefficients
+
+```{r}
+paths <- standardizedSolution(fit_fair) %>%
+  filter(op == "~") %>%
+  select(outcome = lhs, predictor = rhs, beta = est.std, se, z = z, pvalue) %>%
+  mutate(
+    outcome_label = construct_labels[outcome],
+    predictor_label = construct_labels[predictor],
+    significant = pvalue < 0.05,
+    sig_marker = case_when(
+      pvalue < 0.001 ~ "***",
+      pvalue < 0.01 ~ "**",
+      pvalue < 0.05 ~ "*",
+      pvalue < 0.10 ~ ".",
+      TRUE ~ ""
+    )
+  )
+
+paths %>%
+  mutate(
+    beta = round(beta, 3),
+    se = round(se, 3),
+    z = round(z, 3),
+    pvalue = round(pvalue, 4)
+  ) %>%
+  select(
+    Outcome = outcome_label,
+    Predictor = predictor_label,
+    Beta = beta,
+    SE = se,
+    z = z,
+    `p-value` = pvalue,
+    Sig = sig_marker
+  ) %>%
+  kable(caption = "FAIR Model Path Coefficients (Standardized)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  footnote(general = "Significance: *** p < 0.001, ** p < 0.01, * p < 0.05, . p < 0.10")
+```
+
+## Path Coefficients Visualization
+
+```{r fig.width=10, fig.height=6}
+paths_plot <- paths %>%
+  mutate(
+    path = paste(predictor_label, "->", outcome_label),
+    path = factor(path, levels = rev(path))
+  )
+
+ggplot(paths_plot, aes(x = path, y = beta)) +
+  geom_col(aes(fill = significant), width = 0.7) +
+  geom_errorbar(aes(ymin = beta - 1.96*se, ymax = beta + 1.96*se), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("TRUE" = "steelblue", "FALSE" = "gray70"),
+    labels = c("TRUE" = "p < 0.05", "FALSE" = "Not significant"),
+    name = NULL
+  ) +
+  labs(
+    title = "FAIR Model: Standardized Path Coefficients",
+    subtitle = "Error bars show 95% confidence intervals",
+    x = NULL,
+    y = "Standardized Beta"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+## Model Diagram
+
+```{r fig.width=12, fig.height=10}
+semPaths(
+  fit_fair,
+  whatLabels = "std",
+  layout = "tree2",
+  edge.label.cex = 0.8,
+  node.label.cex = 0.7,
+  sizeMan = 4,
+  sizeLat = 8,
+  style = "lisrel",
+  nCharNodes = 0,
+  nCharEdges = 0,
+  fade = FALSE,
+  residuals = FALSE,
+  intercepts = FALSE,
+  thresholds = FALSE,
+  exoCov = FALSE
+)
+```
+
+## R-squared Values
+
+```{r}
+r2 <- lavInspect(fit_fair, "rsquare")
+r2_df <- data.frame(
+  Construct = construct_labels[names(r2)],
+  R_squared = round(r2, 3)
+) %>%
+  filter(!is.na(R_squared))
+
+r2_df %>%
+  arrange(desc(R_squared)) %>%
+  kable(caption = "Variance Explained (R-squared)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Modified FAIR Model (6 Constructs)
+
+Combines Perceived Ease of Use and Perceived Usefulness into "Perceived Effectiveness".
+
+```{r}
+constructs_modified <- constructs
+constructs_modified$perceived_effectiveness <- c(
+  constructs$perceived_ease_of_use,
+  constructs$perceived_usefulness
+)
+constructs_modified$perceived_ease_of_use <- NULL
+constructs_modified$perceived_usefulness <- NULL
+
+construct_labels_modified <- c(
+  construct_labels,
+  perceived_effectiveness = "Perceived Effectiveness"
+)
+
+modified_paths <- c(
+  "# Fairness paths",
+  "perceived_fairness ~ system_quality + service_quality",
+  "",
+  "# TAM paths (modified)",
+  "perceived_effectiveness ~ system_quality + service_quality + perceived_fairness",
+  "attitude_toward_use ~ perceived_fairness + perceived_effectiveness",
+  "behavioral_intention ~ attitude_toward_use"
+)
+
+modified_model <- build_sem_model(constructs_modified, modified_paths)
+cat("Modified FAIR Model Specification:\n\n")
+cat(modified_model)
+```
+
+## Fit Modified Model
+
+```{r}
+fit_modified <- sem(
+  modified_model,
+  data = df_items,
+  std.lv = TRUE,
+  estimator = "MLM"
+)
+```
+
+## Modified Model Fit
+
+```{r}
+if (lavInspect(fit_modified, "converged")) {
+  fit_measures_mod <- fitMeasures(fit_modified, c(
+    "chisq", "df", "pvalue",
+    "cfi", "tli", "rmsea", "srmr"
+  ))
+
+  fit_df_mod <- data.frame(
+    Index = c("Chi-square", "df", "p-value", "CFI", "TLI", "RMSEA", "SRMR"),
+    Value = c(
+      round(fit_measures_mod["chisq"], 2),
+      fit_measures_mod["df"],
+      round(fit_measures_mod["pvalue"], 4),
+      round(fit_measures_mod["cfi"], 3),
+      round(fit_measures_mod["tli"], 3),
+      round(fit_measures_mod["rmsea"], 3),
+      round(fit_measures_mod["srmr"], 3)
+    ),
+    Threshold = c("-", "-", "> 0.05", ">= 0.90", ">= 0.90", "<= 0.08", "<= 0.08")
+  )
+
+  fit_df_mod %>%
+    kable(caption = "Modified FAIR Model Fit Indices") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  cat("WARNING: Modified FAIR model did not converge. Fit indices not available.\n")
+  fit_measures_mod <- NULL
+}
+```
+
+## Modified Model Path Coefficients
+
+```{r}
+if (lavInspect(fit_modified, "converged")) {
+  paths_mod <- standardizedSolution(fit_modified) %>%
+    filter(op == "~") %>%
+    select(outcome = lhs, predictor = rhs, beta = est.std, se, pvalue) %>%
+    mutate(
+      outcome_label = construct_labels_modified[outcome],
+      predictor_label = construct_labels_modified[predictor],
+      significant = pvalue < 0.05,
+      sig_marker = case_when(
+        pvalue < 0.001 ~ "***",
+        pvalue < 0.01 ~ "**",
+        pvalue < 0.05 ~ "*",
+        pvalue < 0.10 ~ ".",
+        TRUE ~ ""
+      )
+    )
+
+  paths_mod %>%
+    mutate(
+      beta = round(beta, 3),
+      se = round(se, 3),
+      pvalue = round(pvalue, 4)
+    ) %>%
+    select(
+      Outcome = outcome_label,
+      Predictor = predictor_label,
+      Beta = beta,
+      SE = se,
+      `p-value` = pvalue,
+      Sig = sig_marker
+    ) %>%
+    kable(caption = "Modified FAIR Model Path Coefficients (Standardized)") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  paths_mod <- NULL
+  cat("Path coefficients not available (model did not converge).\n")
+}
+```
+
+# Model Comparison
+
+```{r}
+if (!is.null(fit_measures_mod)) {
+  comparison_df <- data.frame(
+    Metric = c("Chi-square", "df", "CFI", "TLI", "RMSEA", "SRMR", "# Parameters"),
+    FAIR = c(
+      round(fit_measures["chisq"], 2),
+      fit_measures["df"],
+      round(fit_measures["cfi"], 3),
+      round(fit_measures["tli"], 3),
+      round(fit_measures["rmsea"], 3),
+      round(fit_measures["srmr"], 3),
+      fitmeasures(fit_fair, "npar")
+    ),
+    Modified_FAIR = c(
+      round(fit_measures_mod["chisq"], 2),
+      fit_measures_mod["df"],
+      round(fit_measures_mod["cfi"], 3),
+      round(fit_measures_mod["tli"], 3),
+      round(fit_measures_mod["rmsea"], 3),
+      round(fit_measures_mod["srmr"], 3),
+      fitmeasures(fit_modified, "npar")
+    )
+  )
+
+  comparison_df %>%
+    kable(caption = "Model Comparison") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  cat("Model comparison not available (Modified FAIR model did not converge).\n")
+}
+```
+
+# Hypothesis Testing Summary
+
+```{r}
+hypotheses <- data.frame(
+  Hypothesis = paste0("H", 1:12),
+  Path = c(
+    "System Quality -> Perceived Fairness",
+    "Service Quality -> Perceived Fairness",
+    "Perceived Fairness -> Perceived Usefulness",
+    "Perceived Fairness -> Attitude Toward Use",
+    "System Quality -> Perceived Ease of Use",
+    "Service Quality -> Perceived Ease of Use",
+    "System Quality -> Perceived Usefulness",
+    "Service Quality -> Perceived Usefulness",
+    "Perceived Ease of Use -> Perceived Usefulness",
+    "Perceived Ease of Use -> Attitude Toward Use",
+    "Perceived Usefulness -> Attitude Toward Use",
+    "Attitude Toward Use -> Behavioral Intention"
+  )
+)
+
+# Match with results
+hypotheses$Beta <- NA
+hypotheses$p_value <- NA
+hypotheses$Supported <- NA
+
+for (i in 1:nrow(hypotheses)) {
+  # Find matching path in results
+  path_parts <- strsplit(hypotheses$Path[i], " -> ")[[1]]
+  pred <- names(construct_labels)[construct_labels == path_parts[1]]
+  out <- names(construct_labels)[construct_labels == path_parts[2]]
+
+  match <- paths %>% filter(predictor == pred, outcome == out)
+
+  if (nrow(match) == 1) {
+    hypotheses$Beta[i] <- round(match$beta, 3)
+    hypotheses$p_value[i] <- round(match$pvalue, 4)
+    hypotheses$Supported[i] <- ifelse(match$pvalue < 0.05 & match$beta > 0, "Yes",
+                                       ifelse(match$pvalue < 0.10 & match$beta > 0, "Marginal", "No"))
+  }
+}
+
+hypotheses %>%
+  kable(caption = "Hypothesis Testing Results (FAIR Model)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  row_spec(which(hypotheses$Supported == "Yes"), background = "#d4edda") %>%
+  row_spec(which(hypotheses$Supported == "Marginal"), background = "#fff3cd") %>%
+  row_spec(which(hypotheses$Supported == "No"), background = "#f8d7da")
+```
+
+# Conclusions
+
+```{r results='asis'}
+n_supported <- sum(hypotheses$Supported == "Yes", na.rm = TRUE)
+n_marginal <- sum(hypotheses$Supported == "Marginal", na.rm = TRUE)
+n_not_supported <- sum(hypotheses$Supported == "No", na.rm = TRUE)
+
+cat("## Summary\n\n")
+cat("- **Supported (p < 0.05):**", n_supported, "hypotheses\n")
+cat("- **Marginally supported (p < 0.10):**", n_marginal, "hypotheses\n")
+cat("- **Not supported:**", n_not_supported, "hypotheses\n\n")
+
+cat("## Key Findings\n\n")
+
+# Report significant paths
+sig_paths <- paths %>% filter(pvalue < 0.05)
+if (nrow(sig_paths) > 0) {
+  cat("**Significant paths (p < 0.05):**\n\n")
+  for (i in 1:nrow(sig_paths)) {
+    cat("- ", sig_paths$predictor_label[i], " -> ", sig_paths$outcome_label[i],
+        " (beta = ", round(sig_paths$beta[i], 3), ", p = ", round(sig_paths$pvalue[i], 4), ")\n", sep = "")
+  }
+}
+
+# Report non-significant paths
+nonsig_paths <- paths %>% filter(pvalue >= 0.05)
+if (nrow(nonsig_paths) > 0) {
+  cat("\n**Non-significant paths (p >= 0.05):**\n\n")
+  for (i in 1:nrow(nonsig_paths)) {
+    cat("- ", nonsig_paths$predictor_label[i], " -> ", nonsig_paths$outcome_label[i],
+        " (beta = ", round(nonsig_paths$beta[i], 3), ", p = ", round(nonsig_paths$pvalue[i], 4), ")\n", sep = "")
+  }
+}
+
+cat("\n## Limitations\n\n")
+cat("- Item selection was based on psychometric criteria (item-total correlation, factor loadings)\n")
+cat("- No split-sample validation was performed\n")
+cat("- Model fit indices should be evaluated against recommended thresholds\n")
+```
+
+# Save Results
+
+```{r}
+saveRDS(fit_fair, "fit_fair.rds")
+saveRDS(fit_modified, "fit_modified.rds")
+saveRDS(paths, "paths_fair.rds")
+saveRDS(paths_mod, "paths_modified.rds")
+cat("Results saved.\n")
+```

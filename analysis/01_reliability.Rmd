@@ -1,0 +1,310 @@
+---
+title: "Step 1: Internal Reliability Analysis"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This analysis evaluates internal reliability of each construct and identifies
+items for potential removal based on psychometric criteria only.
+
+**Criteria for item removal:**
+
+- Item-total correlation < 0.3
+
+**We do NOT remove items based on:**
+
+- Whether they produce significant path coefficients
+- Whether the model converges
+
+```{r setup, message=FALSE, warning=FALSE}
+library(ltm)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(kableExtra)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Load Data
+
+```{r}
+df <- read.csv("../data/Dec2BonusDataset.csv")
+
+# Reverse-code negatively worded items
+reverse_items <- c("Q2", "Q7", "Q9", "Q15", "Q25", "Q31", "Q37", "Q42")
+for (item in reverse_items) {
+  df[[item]] <- 6 - df[[item]]
+}
+
+df_items <- df[paste0("Q", 0:44)]
+
+cat("Sample size:", nrow(df_items), "\n")
+cat("Number of items:", ncol(df_items), "\n")
+```
+
+# Define Constructs
+
+```{r}
+constructs <- list(
+  system_quality = paste0("Q", 0:5),
+  service_quality = paste0("Q", 6:15),
+  perceived_fairness = paste0("Q", 16:23),
+  perceived_ease_of_use = paste0("Q", 24:28),
+  perceived_usefulness = paste0("Q", 29:35),
+  attitude_toward_use = paste0("Q", 36:39),
+  behavioral_intention = paste0("Q", 40:44)
+)
+
+construct_labels <- c(
+  system_quality = "System Quality",
+  service_quality = "Service Quality",
+  perceived_fairness = "Perceived Fairness",
+  perceived_ease_of_use = "Perceived Ease of Use",
+  perceived_usefulness = "Perceived Usefulness",
+  attitude_toward_use = "Attitude Toward Use",
+  behavioral_intention = "Behavioral Intention"
+)
+```
+
+# Reliability Analysis
+
+```{r}
+analyze_reliability <- function(data, items, construct_name) {
+  subset <- data[, items]
+
+  # Cronbach's alpha
+  alpha <- cronbach.alpha(subset)$alpha
+
+  # Item-total correlations (corrected)
+  total_score <- rowSums(subset)
+  item_total_cors <- sapply(items, function(item) {
+    cor(subset[[item]], total_score - subset[[item]])
+  })
+
+  # Alpha if item deleted
+  alpha_if_deleted <- sapply(items, function(item) {
+    remaining <- setdiff(items, item)
+    if (length(remaining) >= 2) {
+      cronbach.alpha(data[, remaining])$alpha
+    } else {
+      NA
+    }
+  })
+
+  result <- data.frame(
+    item = items,
+    item_total_cor = item_total_cors,
+    alpha_if_deleted = alpha_if_deleted,
+    flag = item_total_cors < 0.3,
+    stringsAsFactors = FALSE
+  )
+
+  return(list(alpha = alpha, details = result))
+}
+
+# Run analysis for all constructs
+reliability_results <- list()
+for (name in names(constructs)) {
+  reliability_results[[name]] <- analyze_reliability(
+    df_items,
+    constructs[[name]],
+    name
+  )
+}
+```
+
+## Summary Table
+
+```{r}
+summary_df <- data.frame(
+  Construct = construct_labels[names(constructs)],
+  Items = sapply(constructs, length),
+  Alpha = sapply(reliability_results, function(x) x$alpha),
+  Flagged = sapply(reliability_results, function(x) sum(x$details$flag))
+)
+
+summary_df %>%
+  mutate(
+    Alpha = round(Alpha, 3),
+    Status = case_when(
+      Alpha >= 0.7 ~ "Good",
+      Alpha >= 0.6 ~ "Acceptable",
+      TRUE ~ "Poor"
+    )
+  ) %>%
+  kable(align = "lcccc") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Cronbach's Alpha Visualization
+
+```{r fig.width=8, fig.height=5}
+alpha_df <- data.frame(
+  construct = factor(construct_labels[names(constructs)],
+                     levels = rev(construct_labels[names(constructs)])),
+  alpha = sapply(reliability_results, function(x) x$alpha)
+)
+
+ggplot(alpha_df, aes(x = construct, y = alpha)) +
+  geom_col(aes(fill = alpha >= 0.6), width = 0.7) +
+  geom_hline(yintercept = 0.6, linetype = "dashed", color = "red", size = 1) +
+  geom_hline(yintercept = 0.7, linetype = "dashed", color = "darkgreen", size = 1) +
+  geom_text(aes(label = round(alpha, 2)), hjust = -0.2, size = 4) +
+  coord_flip() +
+  scale_fill_manual(values = c("TRUE" = "steelblue", "FALSE" = "coral"),
+                    guide = "none") +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  labs(
+    title = "Cronbach's Alpha by Construct",
+    subtitle = "Red line = 0.6 (acceptable), Green line = 0.7 (good)",
+    x = NULL,
+    y = "Cronbach's Alpha"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+## Item-Total Correlations
+
+```{r fig.width=10, fig.height=8}
+# Combine all item-total correlations
+all_items <- do.call(rbind, lapply(names(reliability_results), function(name) {
+  df <- reliability_results[[name]]$details
+  df$construct <- construct_labels[name]
+  df
+}))
+
+ggplot(all_items, aes(x = reorder(item, item_total_cor), y = item_total_cor)) +
+  geom_col(aes(fill = flag), width = 0.8) +
+  geom_hline(yintercept = 0.3, linetype = "dashed", color = "red", size = 0.8) +
+  facet_wrap(~construct, scales = "free_y", ncol = 2) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("TRUE" = "coral", "FALSE" = "steelblue"),
+    labels = c("TRUE" = "Below threshold", "FALSE" = "Acceptable"),
+    name = "Status"
+  ) +
+  labs(
+    title = "Item-Total Correlations by Construct",
+    subtitle = "Red line = 0.3 threshold; items below are flagged for removal",
+    x = NULL,
+    y = "Corrected Item-Total Correlation"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+## Detailed Results by Construct
+
+```{r results='asis'}
+for (name in names(reliability_results)) {
+  cat("\n\n### ", construct_labels[name], "\n\n")
+
+  res <- reliability_results[[name]]
+  cat("**Cronbach's Alpha:**", round(res$alpha, 3), "\n\n")
+
+  res$details %>%
+    mutate(
+      item_total_cor = round(item_total_cor, 3),
+      alpha_if_deleted = round(alpha_if_deleted, 3),
+      flag = ifelse(flag, "REMOVE", "Keep")
+    ) %>%
+    rename(
+      Item = item,
+      `Item-Total r` = item_total_cor,
+      `Alpha if Deleted` = alpha_if_deleted,
+      Decision = flag
+    ) %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+    print()
+}
+```
+
+# Items to Remove
+
+Based strictly on item-total correlation < 0.3:
+
+```{r}
+items_to_remove <- all_items$item[all_items$flag]
+
+if (length(items_to_remove) > 0) {
+  cat("Items flagged for removal:\n")
+  for (item in items_to_remove) {
+    construct <- all_items$construct[all_items$item == item]
+    cor_val <- round(all_items$item_total_cor[all_items$item == item], 3)
+    cat("  -", item, "(", construct, "), r =", cor_val, "\n")
+  }
+} else {
+  cat("No items flagged for removal.\n")
+}
+```
+
+# Revised Constructs
+
+```{r}
+constructs_revised <- lapply(names(constructs), function(name) {
+  items <- constructs[[name]]
+  flagged <- reliability_results[[name]]$details
+  keep <- flagged$item[!flagged$flag]
+  as.character(keep)
+})
+names(constructs_revised) <- names(constructs)
+
+# Summary of changes
+cat("\nConstruct changes:\n\n")
+for (name in names(constructs)) {
+  original <- length(constructs[[name]])
+  revised <- length(constructs_revised[[name]])
+  removed <- original - revised
+  cat(construct_labels[name], ":", original, "->", revised, "items")
+  if (removed > 0) {
+    cat(" (removed", removed, ")")
+  }
+  cat("\n")
+}
+```
+
+## Revised Alpha Values
+
+```{r}
+revised_summary <- data.frame(
+  Construct = construct_labels[names(constructs)],
+  Original_Items = sapply(constructs, length),
+  Original_Alpha = sapply(reliability_results, function(x) x$alpha),
+  Revised_Items = sapply(constructs_revised, length),
+  Revised_Alpha = sapply(names(constructs_revised), function(name) {
+    items <- constructs_revised[[name]]
+    if (length(items) >= 2) {
+      cronbach.alpha(df_items[, items])$alpha
+    } else {
+      NA
+    }
+  })
+)
+
+revised_summary %>%
+  mutate(
+    Original_Alpha = round(Original_Alpha, 3),
+    Revised_Alpha = round(Revised_Alpha, 3),
+    Change = round(Revised_Alpha - Original_Alpha, 3)
+  ) %>%
+  kable(
+    col.names = c("Construct", "Original N", "Original Alpha",
+                  "Revised N", "Revised Alpha", "Change")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Save for Next Step
+
+```{r}
+saveRDS(constructs_revised, "constructs_revised.rds")
+saveRDS(df_items, "df_items.rds")
+cat("\nData saved for CFA analysis.\n")
+```

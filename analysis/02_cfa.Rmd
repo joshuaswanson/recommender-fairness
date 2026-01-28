@@ -1,0 +1,316 @@
+---
+title: "Step 2: Confirmatory Factor Analysis"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This analysis fits the measurement model (CFA) and evaluates:
+
+1. Factor loadings (threshold: >= 0.5, or >= 0.4 with justification)
+2. Model fit indices
+3. Discriminant validity
+
+Items with factor loadings < 0.4 are removed, then the model is refit.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lavaan)
+library(semTools)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(corrplot)
+
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Load Data
+
+```{r}
+constructs <- readRDS("constructs_revised.rds")
+df_items <- readRDS("df_items.rds")
+
+construct_labels <- c(
+  system_quality = "System Quality",
+  service_quality = "Service Quality",
+  perceived_fairness = "Perceived Fairness",
+  perceived_ease_of_use = "Perceived Ease of Use",
+  perceived_usefulness = "Perceived Usefulness",
+  attitude_toward_use = "Attitude Toward Use",
+  behavioral_intention = "Behavioral Intention"
+)
+
+cat("Sample size:", nrow(df_items), "\n")
+```
+
+# Build CFA Model
+
+```{r}
+build_cfa_model <- function(constructs) {
+  model_lines <- sapply(names(constructs), function(name) {
+    items <- constructs[[name]]
+    paste0(name, " =~ ", paste(items, collapse = " + "))
+  })
+  paste(model_lines, collapse = "\n")
+}
+
+cfa_model <- build_cfa_model(constructs)
+cat("CFA Model Specification:\n\n")
+cat(cfa_model)
+```
+
+# Fit Initial CFA
+
+```{r}
+fit_cfa <- cfa(
+  cfa_model,
+  data = df_items,
+  std.lv = TRUE,
+  estimator = "MLM"  # Robust ML for non-normal data
+)
+
+summary(fit_cfa, fit.measures = TRUE, standardized = TRUE)
+```
+
+# Model Fit Indices
+
+```{r}
+fit_measures <- fitMeasures(fit_cfa, c(
+  "chisq", "df", "pvalue",
+  "cfi", "tli", "rmsea", "rmsea.ci.lower", "rmsea.ci.upper", "srmr"
+))
+
+fit_df <- data.frame(
+  Index = c("Chi-square", "df", "p-value", "CFI", "TLI", "RMSEA", "RMSEA 90% CI", "SRMR"),
+  Value = c(
+    round(fit_measures["chisq"], 2),
+    fit_measures["df"],
+    round(fit_measures["pvalue"], 4),
+    round(fit_measures["cfi"], 3),
+    round(fit_measures["tli"], 3),
+    round(fit_measures["rmsea"], 3),
+    paste0("[", round(fit_measures["rmsea.ci.lower"], 3), ", ",
+           round(fit_measures["rmsea.ci.upper"], 3), "]"),
+    round(fit_measures["srmr"], 3)
+  ),
+  Threshold = c("-", "-", "> 0.05", ">= 0.90", ">= 0.90", "<= 0.08", "-", "<= 0.08"),
+  Status = c(
+    "-", "-",
+    ifelse(fit_measures["pvalue"] > 0.05, "Good", "Poor"),
+    ifelse(fit_measures["cfi"] >= 0.90, "Good", ifelse(fit_measures["cfi"] >= 0.85, "Acceptable", "Poor")),
+    ifelse(fit_measures["tli"] >= 0.90, "Good", ifelse(fit_measures["tli"] >= 0.85, "Acceptable", "Poor")),
+    ifelse(fit_measures["rmsea"] <= 0.08, "Good", ifelse(fit_measures["rmsea"] <= 0.10, "Acceptable", "Poor")),
+    "-",
+    ifelse(fit_measures["srmr"] <= 0.08, "Good", "Poor")
+  )
+)
+
+fit_df %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Factor Loadings
+
+```{r}
+loadings <- standardizedSolution(fit_cfa) %>%
+  filter(op == "=~") %>%
+  select(construct = lhs, item = rhs, loading = est.std, se, pvalue) %>%
+  mutate(
+    flag = abs(loading) < 0.4,
+    construct_label = construct_labels[construct]
+  )
+
+loadings %>%
+  mutate(
+    loading = round(loading, 3),
+    se = round(se, 3),
+    pvalue = round(pvalue, 4),
+    status = ifelse(flag, "REMOVE", "Keep")
+  ) %>%
+  select(Construct = construct_label, Item = item, Loading = loading,
+         SE = se, `p-value` = pvalue, Status = status) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  row_spec(which(loadings$flag), background = "#ffcccc")
+```
+
+## Factor Loadings Visualization
+
+```{r fig.width=10, fig.height=8}
+ggplot(loadings, aes(x = reorder(item, loading), y = loading)) +
+  geom_col(aes(fill = flag), width = 0.8) +
+  geom_hline(yintercept = 0.4, linetype = "dashed", color = "red", size = 0.8) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "orange", size = 0.8) +
+  facet_wrap(~construct_label, scales = "free_y", ncol = 2) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("TRUE" = "coral", "FALSE" = "steelblue"),
+    labels = c("TRUE" = "Below 0.4", "FALSE" = "Acceptable"),
+    name = "Status"
+  ) +
+  labs(
+    title = "Standardized Factor Loadings",
+    subtitle = "Red line = 0.4 (minimum), Orange line = 0.5 (preferred)",
+    x = NULL,
+    y = "Standardized Loading"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+# Items to Remove (Loading < 0.4)
+
+```{r}
+items_low_loading <- loadings$item[loadings$flag]
+
+if (length(items_low_loading) > 0) {
+  cat("Items with factor loading < 0.4:\n\n")
+  for (item in items_low_loading) {
+    row <- loadings[loadings$item == item, ]
+    cat("  -", item, "(", row$construct_label, "), loading =", round(row$loading, 3), "\n")
+  }
+} else {
+  cat("No items have factor loading < 0.4.\n")
+}
+```
+
+# Discriminant Validity
+
+Inter-construct correlations should be < 0.85 for discriminant validity.
+
+```{r fig.width=8, fig.height=7}
+cor_matrix <- lavInspect(fit_cfa, "cor.lv")
+
+# Rename for display
+rownames(cor_matrix) <- construct_labels[rownames(cor_matrix)]
+colnames(cor_matrix) <- construct_labels[colnames(cor_matrix)]
+
+corrplot(
+  cor_matrix,
+  method = "color",
+  type = "lower",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  col = colorRampPalette(c("steelblue", "white", "firebrick"))(100),
+  title = "Inter-Construct Correlations",
+  mar = c(0, 0, 2, 0)
+)
+```
+
+```{r}
+# Check for problematic correlations
+cor_long <- reshape2::melt(cor_matrix)
+cor_long <- cor_long[cor_long$Var1 != cor_long$Var2, ]
+high_cors <- cor_long[abs(cor_long$value) > 0.85, ]
+
+if (nrow(high_cors) > 0) {
+  cat("WARNING: High correlations (> 0.85) detected:\n\n")
+  print(high_cors)
+} else {
+  cat("All inter-construct correlations < 0.85. Discriminant validity supported.\n")
+}
+```
+
+# Convergent Validity (AVE)
+
+Average Variance Extracted should be >= 0.5 for convergent validity.
+
+```{r}
+# Calculate AVE manually
+ave_values <- sapply(names(constructs), function(name) {
+  construct_loadings <- loadings$loading[loadings$construct == name]
+  mean(construct_loadings^2)
+})
+
+ave_df <- data.frame(
+  Construct = construct_labels[names(ave_values)],
+  AVE = round(ave_values, 3),
+  Status = ifelse(ave_values >= 0.5, "Good", "Below threshold")
+)
+
+ave_df %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Composite Reliability
+
+```{r}
+cr_values <- compRelSEM(fit_cfa)
+
+cr_df <- data.frame(
+  Construct = construct_labels[names(cr_values)],
+  CR = round(as.numeric(cr_values), 3),
+  Status = ifelse(as.numeric(cr_values) >= 0.7, "Good",
+                  ifelse(as.numeric(cr_values) >= 0.6, "Acceptable", "Poor"))
+)
+
+cr_df %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Refit After Removing Low-Loading Items
+
+```{r}
+if (length(items_low_loading) > 0) {
+  cat("Removing items with loading < 0.4:", paste(items_low_loading, collapse = ", "), "\n\n")
+
+  constructs_final <- lapply(names(constructs), function(name) {
+    items <- constructs[[name]]
+    setdiff(items, items_low_loading)
+  })
+  names(constructs_final) <- names(constructs)
+
+  # Check if any construct has < 2 items
+  for (name in names(constructs_final)) {
+    if (length(constructs_final[[name]]) < 2) {
+      cat("WARNING:", construct_labels[name], "has fewer than 2 items remaining.\n")
+    }
+  }
+
+  # Refit model
+  cfa_model_final <- build_cfa_model(constructs_final)
+  cat("\nRevised CFA Model:\n\n")
+  cat(cfa_model_final)
+
+  fit_cfa_final <- cfa(
+    cfa_model_final,
+    data = df_items,
+    std.lv = TRUE,
+    estimator = "MLM"
+  )
+
+  cat("\n\nRevised Model Fit:\n")
+  fit_final <- fitMeasures(fit_cfa_final, c("cfi", "tli", "rmsea", "srmr"))
+  print(round(fit_final, 3))
+
+} else {
+  constructs_final <- constructs
+  fit_cfa_final <- fit_cfa
+  cat("No items removed. Using original model.\n")
+}
+```
+
+# Save for SEM Analysis
+
+```{r}
+saveRDS(constructs_final, "constructs_final.rds")
+saveRDS(fit_cfa_final, "fit_cfa_final.rds")
+cat("\nFinal constructs saved for SEM analysis.\n")
+```
+
+# Summary
+
+```{r}
+cat("\nFinal construct composition:\n\n")
+for (name in names(constructs_final)) {
+  cat(construct_labels[name], ":", paste(constructs_final[[name]], collapse = ", "), "\n")
+}
+```
