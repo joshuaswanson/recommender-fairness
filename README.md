@@ -4,11 +4,11 @@ A research project for CS-498 (Research Project in Computer Science II) at EPFL,
 
 ## Research Question
 
-Two-sided recommender systems (2SRS) like TikTok serve both content creators and consumers. This study asks: **Does users' perception of fairness affect their attitudes and intentions to use the platform?**
+Two-sided recommender systems (2SRS) like TikTok serve both content creators and consumers. This study asks: Does users' perception of fairness affect their attitudes and intentions to use the platform?
 
 ## The FAIR Model
 
-We extended the Technology Acceptance Model (TAM) by adding **Perceived Fairness** as a construct, creating the "FAIR model":
+We extended the Technology Acceptance Model (TAM) by adding Perceived Fairness as a construct, creating the "FAIR model":
 
 ![FAIR Model](figures/fair_model.png)
 
@@ -31,7 +31,7 @@ We extended the Technology Acceptance Model (TAM) by adding **Perceived Fairness
 - **Participants**: 429 MTurk workers (filtered from 630 using reverse-worded attention checks)
 - **Demographics**: Mostly ages 25-44, 50/50 gender split, 6+ months TikTok experience
 
-## Key Findings
+## Findings
 
 ![Hypothesis Results](figures/hypothesis_results.png)
 
@@ -76,7 +76,7 @@ We also tested a modified version combining Perceived Ease of Use and Perceived 
 
 For detailed results including correlation matrices, see [analysis/RESULTS.md](analysis/RESULTS.md).
 
-## Repository Structure
+## Repo Structure
 
 ```
 data/
@@ -138,7 +138,7 @@ Rscript -e "renv::activate(); setwd('analysis'); rmarkdown::render('03_sem.Rmd')
 
 This generates HTML notebook outputs (`.nb.html` files) in the `analysis/` directory.
 
-### Key R packages
+### R packages
 
 | Package | Purpose |
 |---------|---------|
