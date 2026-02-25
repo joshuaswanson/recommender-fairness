@@ -176,13 +176,15 @@ renv.lock                 R package lockfile (for reproducibility)
 
 ## Analysis
 
-The analysis is split into three sequential R Markdown files in `analysis/`:
+The analysis is split into four sequential R Markdown files in `analysis/`:
 
 1. **`01_reliability.Rmd`**: Internal reliability analysis using Cronbach's alpha. Identifies and removes items with item-total correlation < 0.3.
 
 2. **`02_cfa.Rmd`**: Confirmatory Factor Analysis to validate the measurement model. Removes items with factor loadings < 0.4 and checks discriminant/convergent validity.
 
 3. **`03_sem.Rmd`**: Structural Equation Modeling to test the hypothesized paths in the FAIR model and a modified version with combined constructs.
+
+4. **`04_modification_indices.Rmd`**: Post-hoc analysis of modification indices, method factor for reverse-coded items, and alternative model specifications.
 
 ### Item Selection Criteria
 
@@ -215,6 +217,7 @@ The analyses must be run in order since each depends on the previous:
 Rscript -e "renv::activate(); setwd('analysis'); rmarkdown::render('01_reliability.Rmd')"
 Rscript -e "renv::activate(); setwd('analysis'); rmarkdown::render('02_cfa.Rmd')"
 Rscript -e "renv::activate(); setwd('analysis'); rmarkdown::render('03_sem.Rmd')"
+Rscript -e "renv::activate(); setwd('analysis'); rmarkdown::render('04_modification_indices.Rmd')"
 ```
 
 This generates HTML notebook outputs (`.nb.html` files) in the `analysis/` directory.
