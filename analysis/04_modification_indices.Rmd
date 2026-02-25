@@ -1,0 +1,257 @@
+---
+title: "Step 4: Post-Hoc Modification Indices"
+output:
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This analysis extracts modification indices from the FAIR SEM model to identify
+sources of misfit and tests theoretically motivated alternative specifications.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lavaan)
+library(semTools)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+```
+
+# Load Data
+
+```{r}
+constructs <- readRDS("constructs_final.rds")
+df_items <- readRDS("df_items.rds")
+
+construct_labels <- c(
+  system_quality = "System Quality",
+  service_quality = "Service Quality",
+  perceived_fairness = "Perceived Fairness",
+  perceived_ease_of_use = "Perceived Ease of Use",
+  perceived_usefulness = "Perceived Usefulness",
+  attitude_toward_use = "Attitude Toward Use",
+  behavioral_intention = "Behavioral Intention"
+)
+
+cat("Sample size:", nrow(df_items), "\n")
+```
+
+# Rebuild and Fit FAIR Model
+
+```{r}
+build_sem_model <- function(constructs, structural_paths) {
+  measurement <- sapply(names(constructs), function(name) {
+    items <- constructs[[name]]
+    paste0(name, " =~ ", paste(items, collapse = " + "))
+  })
+  paste(c(measurement, "", "# Structural paths", structural_paths), collapse = "\n")
+}
+
+fair_paths <- c(
+  "perceived_fairness ~ system_quality + service_quality",
+  "perceived_ease_of_use ~ system_quality + service_quality",
+  "perceived_usefulness ~ system_quality + service_quality + perceived_fairness + perceived_ease_of_use",
+  "attitude_toward_use ~ perceived_fairness + perceived_ease_of_use + perceived_usefulness",
+  "behavioral_intention ~ attitude_toward_use"
+)
+
+fair_model <- build_sem_model(constructs, fair_paths)
+fit_fair <- sem(fair_model, data = df_items, std.lv = TRUE, estimator = "MLM")
+```
+
+## Current Model Fit
+
+```{r}
+fit_measures <- fitMeasures(fit_fair, c("cfi", "tli", "rmsea", "srmr"))
+
+data.frame(
+  Index = c("CFI", "TLI", "RMSEA", "SRMR"),
+  Value = round(as.numeric(fit_measures), 3),
+  Threshold = c(">= 0.90", ">= 0.90", "<= 0.08", "<= 0.08")
+) %>%
+  kable(caption = "Current FAIR Model Fit") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Modification Indices
+
+```{r}
+mi <- modificationIndices(fit_fair, sort. = TRUE, minimum.value = 3.84)
+
+head(mi, 30) %>%
+  select(lhs, op, rhs, mi, epc, sepc.all) %>%
+  mutate(mi = round(mi, 1), epc = round(epc, 3), sepc.all = round(sepc.all, 3)) %>%
+  kable(caption = "Top 30 Modification Indices") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Cross-Loadings
+
+Items that want to load on constructs other than their assigned one.
+
+```{r}
+mi_crossload <- mi %>%
+  filter(op == "=~") %>%
+  head(15) %>%
+  mutate(construct = construct_labels[lhs])
+
+mi_crossload %>%
+  select(Construct = construct, Item = rhs, MI = mi, EPC = epc, `Std EPC` = sepc.all) %>%
+  mutate(MI = round(MI, 1), EPC = round(EPC, 3), `Std EPC` = round(`Std EPC`, 3)) %>%
+  kable(caption = "Top Cross-Loading Suggestions") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Error Covariances
+
+Pairs of items whose residuals are correlated beyond what the model explains.
+
+```{r}
+mi_errcov <- mi %>%
+  filter(op == "~~", !lhs %in% names(construct_labels), !rhs %in% names(construct_labels)) %>%
+  head(15)
+
+reverse_items <- c("Q2", "Q7", "Q9", "Q15", "Q25", "Q31", "Q37", "Q42")
+
+mi_errcov %>%
+  mutate(
+    Both_Reversed = (lhs %in% reverse_items) & (rhs %in% reverse_items)
+  ) %>%
+  select(Item1 = lhs, Item2 = rhs, MI = mi, `Both Reversed` = Both_Reversed) %>%
+  mutate(MI = round(MI, 1)) %>%
+  kable(caption = "Top Error Covariance Suggestions") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Method Factor Model
+
+Adding an orthogonal method factor for the reverse-coded items still in the model
+to capture shared response bias from negative item wording.
+
+```{r}
+paths_orig <- standardizedSolution(fit_fair) %>%
+  filter(op == "~") %>%
+  select(lhs, rhs, beta_orig = est.std, p_orig = pvalue)
+
+items_in_model <- unlist(constructs)
+reverse_in_model <- intersect(reverse_items, items_in_model)
+cat("Reverse-coded items in model:", paste(reverse_in_model, collapse = ", "), "\n")
+
+method_factor <- paste0("method =~ ", paste(reverse_in_model, collapse = " + "))
+
+fair_model_method <- paste(c(fair_model, "",
+  "# Method factor for reverse-coded items",
+  method_factor,
+  "method ~~ 0*system_quality",
+  "method ~~ 0*service_quality",
+  "method ~~ 0*perceived_fairness",
+  "method ~~ 0*perceived_ease_of_use",
+  "method ~~ 0*perceived_usefulness",
+  "method ~~ 0*attitude_toward_use",
+  "method ~~ 0*behavioral_intention"
+), collapse = "\n")
+
+fit_method <- suppressWarnings(
+  sem(fair_model_method, data = df_items, std.lv = TRUE, estimator = "MLM")
+)
+```
+
+## Method Factor Model Fit
+
+```{r}
+fit_method_measures <- fitMeasures(fit_method, c("cfi", "tli", "rmsea", "srmr"))
+
+data.frame(
+  Index = c("CFI", "TLI", "RMSEA", "SRMR"),
+  Original = round(as.numeric(fit_measures), 3),
+  Method_Factor = round(as.numeric(fit_method_measures), 3),
+  Change = round(as.numeric(fit_method_measures) - as.numeric(fit_measures), 3)
+) %>%
+  kable(caption = "Fit Comparison: Original vs Method Factor Model") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Path Coefficients Comparison
+
+```{r}
+paths_method <- standardizedSolution(fit_method) %>%
+  filter(op == "~") %>%
+  select(lhs, rhs, beta_method = est.std, p_method = pvalue)
+
+comparison <- merge(paths_orig, paths_method, by = c("lhs", "rhs"))
+comparison$lhs_label <- construct_labels[comparison$lhs]
+comparison$rhs_label <- construct_labels[comparison$rhs]
+
+comparison %>%
+  select(
+    `Path To` = lhs_label, `Path From` = rhs_label,
+    `Beta (Orig)` = beta_orig, `Beta (Method)` = beta_method,
+    `p (Orig)` = p_orig, `p (Method)` = p_method
+  ) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  kable(caption = "Path Coefficients: Original vs Method Factor Model") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Method Factor Loadings
+
+```{r}
+standardizedSolution(fit_method) %>%
+  filter(op == "=~", lhs == "method") %>%
+  select(Item = rhs, Loading = est.std, `p-value` = pvalue) %>%
+  mutate(Loading = round(Loading, 3), `p-value` = round(`p-value`, 4)) %>%
+  kable(caption = "Method Factor Loadings") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Direct PU -> BI Path
+
+The original TAM (Davis, 1989) includes a direct path from Perceived Usefulness
+to Behavioral Intention, which the FAIR model omits.
+
+```{r}
+fair_paths_pu_bi <- c(
+  "perceived_fairness ~ system_quality + service_quality",
+  "perceived_ease_of_use ~ system_quality + service_quality",
+  "perceived_usefulness ~ system_quality + service_quality + perceived_fairness + perceived_ease_of_use",
+  "attitude_toward_use ~ perceived_fairness + perceived_ease_of_use + perceived_usefulness",
+  "behavioral_intention ~ attitude_toward_use + perceived_usefulness"
+)
+
+fair_model_pu_bi <- build_sem_model(constructs, fair_paths_pu_bi)
+
+fit_pu_bi <- suppressWarnings(
+  sem(fair_model_pu_bi, data = df_items, std.lv = TRUE, estimator = "MLM")
+)
+
+if (lavInspect(fit_pu_bi, "converged")) {
+  fit_pu_bi_measures <- fitMeasures(fit_pu_bi, c("cfi", "tli", "rmsea", "srmr"))
+
+  data.frame(
+    Index = c("CFI", "TLI", "RMSEA", "SRMR"),
+    Original = round(as.numeric(fit_measures), 3),
+    PU_BI = round(as.numeric(fit_pu_bi_measures), 3),
+    Change = round(as.numeric(fit_pu_bi_measures) - as.numeric(fit_measures), 3)
+  ) %>%
+    kable(caption = "Fit Comparison: Original vs PU -> BI Model") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+} else {
+  cat("Model did not converge.\n")
+}
+```
+
+```{r results='asis'}
+# Check for identification issues
+vcov_ok <- tryCatch({
+  vcov(fit_pu_bi)
+  TRUE
+}, error = function(e) FALSE)
+
+if (!vcov_ok) {
+  cat("**Note:** The information matrix could not be inverted, indicating model",
+      "identification problems. Standard errors are not computable. This is likely",
+      "because Attitude Toward Use already predicts Behavioral Intention at the",
+      "boundary (beta = 1.000), leaving no identifiable variance for a second",
+      "predictor. The original FAIR model specification is retained.\n")
+}
+```

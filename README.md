@@ -119,7 +119,7 @@ We also tested a modified version combining Perceived Ease of Use and Perceived 
 
 ## Post-Hoc Analysis
 
-Post-hoc analyses were conducted to investigate the sources of below-threshold model fit and to test a theoretically motivated alternative specification. Code is in `analysis/04_modification_indices.R`.
+Post-hoc analyses were conducted to investigate the sources of below-threshold model fit and to test a theoretically motivated alternative specification. Code is in `analysis/04_modification_indices.Rmd`.
 
 ### Modification Indices and Method Factor
 
@@ -161,7 +161,7 @@ analysis/
   01_reliability.Rmd      Step 1: Internal reliability analysis
   02_cfa.Rmd              Step 2: Confirmatory Factor Analysis
   03_sem.Rmd              Step 3: Structural Equation Modeling
-  04_modification_indices.R  Post-hoc modification indices analysis
+  04_modification_indices.Rmd  Step 4: Post-hoc modification indices
   generate_figures.R      Script to regenerate all figures
 
 figures/
