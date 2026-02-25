@@ -196,6 +196,182 @@ generate_correlation_matrices <- function() {
 }
 
 # ------------------------------------------------------------------------------
+# Path Coefficients
+# ------------------------------------------------------------------------------
+
+generate_path_coefficients <- function() {
+  library(lavaan)
+
+  constructs <- readRDS("analysis/constructs_final.rds")
+  df_items <- readRDS("analysis/df_items.rds")
+
+  construct_labels <- c(
+    system_quality = "System Quality",
+    service_quality = "Service Quality",
+    perceived_fairness = "Perceived Fairness",
+    perceived_ease_of_use = "Perceived Ease of Use",
+    perceived_usefulness = "Perceived Usefulness",
+    attitude_toward_use = "Attitude Toward Use",
+    behavioral_intention = "Behavioral Intention"
+  )
+
+  # Build and fit model
+  measurement <- sapply(names(constructs), function(name) {
+    paste0(name, " =~ ", paste(constructs[[name]], collapse = " + "))
+  })
+  structural <- c(
+    "perceived_fairness ~ system_quality + service_quality",
+    "perceived_ease_of_use ~ system_quality + service_quality",
+    "perceived_usefulness ~ system_quality + service_quality + perceived_fairness + perceived_ease_of_use",
+    "attitude_toward_use ~ perceived_fairness + perceived_ease_of_use + perceived_usefulness",
+    "behavioral_intention ~ attitude_toward_use"
+  )
+  model <- paste(c(measurement, "", structural), collapse = "\n")
+  fit <- sem(model, data = df_items, std.lv = TRUE, estimator = "MLM")
+
+  paths <- standardizedSolution(fit) %>%
+    filter(op == "~") %>%
+    mutate(
+      outcome_label = construct_labels[lhs],
+      predictor_label = construct_labels[rhs],
+      path = paste(predictor_label, "->", outcome_label),
+      path = factor(path, levels = rev(path)),
+      significant = pvalue < 0.05
+    )
+
+  p <- ggplot(paths, aes(x = path, y = est.std)) +
+    geom_col(aes(fill = significant), width = 0.7) +
+    geom_errorbar(aes(ymin = est.std - 1.96*se, ymax = est.std + 1.96*se), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    coord_flip() +
+    scale_fill_manual(
+      values = c("TRUE" = "steelblue", "FALSE" = "gray70"),
+      labels = c("TRUE" = "p < 0.05", "FALSE" = "Not significant"),
+      name = NULL
+    ) +
+    labs(
+      title = "FAIR Model: Standardized Path Coefficients",
+      subtitle = "Error bars show 95% confidence intervals",
+      x = NULL,
+      y = "Standardized Beta"
+    ) +
+    theme(
+      plot.title = element_text(face = "bold"),
+      legend.position = "bottom"
+    )
+
+  ggsave("figures/path_coefficients.png", p, width = 10, height = 6, dpi = 150, bg = "white")
+  cat("Saved: figures/path_coefficients.png\n")
+}
+
+# ------------------------------------------------------------------------------
+# Hypothesis Results
+# ------------------------------------------------------------------------------
+
+generate_hypothesis_results <- function() {
+  library(lavaan)
+
+  constructs <- readRDS("analysis/constructs_final.rds")
+  df_items <- readRDS("analysis/df_items.rds")
+
+  construct_labels <- c(
+    system_quality = "System Quality",
+    service_quality = "Service Quality",
+    perceived_fairness = "Perceived Fairness",
+    perceived_ease_of_use = "Perceived Ease of Use",
+    perceived_usefulness = "Perceived Usefulness",
+    attitude_toward_use = "Attitude Toward Use",
+    behavioral_intention = "Behavioral Intention"
+  )
+
+  # Build and fit model
+  measurement <- sapply(names(constructs), function(name) {
+    paste0(name, " =~ ", paste(constructs[[name]], collapse = " + "))
+  })
+  structural <- c(
+    "perceived_fairness ~ system_quality + service_quality",
+    "perceived_ease_of_use ~ system_quality + service_quality",
+    "perceived_usefulness ~ system_quality + service_quality + perceived_fairness + perceived_ease_of_use",
+    "attitude_toward_use ~ perceived_fairness + perceived_ease_of_use + perceived_usefulness",
+    "behavioral_intention ~ attitude_toward_use"
+  )
+  model <- paste(c(measurement, "", structural), collapse = "\n")
+  fit <- sem(model, data = df_items, std.lv = TRUE, estimator = "MLM")
+
+  paths <- standardizedSolution(fit) %>%
+    filter(op == "~") %>%
+    mutate(
+      outcome_label = construct_labels[lhs],
+      predictor_label = construct_labels[rhs]
+    )
+
+  hypotheses <- data.frame(
+    Hypothesis = paste0("H", 1:12),
+    Path = c(
+      "System Quality -> Perceived Fairness",
+      "Service Quality -> Perceived Fairness",
+      "Perceived Fairness -> Perceived Usefulness",
+      "Perceived Fairness -> Attitude Toward Use",
+      "System Quality -> Perceived Ease of Use",
+      "Service Quality -> Perceived Ease of Use",
+      "System Quality -> Perceived Usefulness",
+      "Service Quality -> Perceived Usefulness",
+      "Perceived Ease of Use -> Perceived Usefulness",
+      "Perceived Ease of Use -> Attitude Toward Use",
+      "Perceived Usefulness -> Attitude Toward Use",
+      "Attitude Toward Use -> Behavioral Intention"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  hypotheses$Beta <- NA
+  hypotheses$p_value <- NA
+  hypotheses$Result <- NA
+
+  for (i in 1:nrow(hypotheses)) {
+    parts <- strsplit(hypotheses$Path[i], " -> ")[[1]]
+    pred <- names(construct_labels)[construct_labels == parts[1]]
+    out <- names(construct_labels)[construct_labels == parts[2]]
+    match <- paths %>% filter(rhs == pred, lhs == out)
+    if (nrow(match) == 1) {
+      hypotheses$Beta[i] <- round(match$est.std, 3)
+      hypotheses$p_value[i] <- match$pvalue
+      hypotheses$Result[i] <- ifelse(match$pvalue < 0.05 & match$est.std > 0, "Supported",
+                                      ifelse(match$pvalue < 0.10 & match$est.std > 0, "Marginal", "Not supported"))
+    }
+  }
+
+  hypotheses$Result <- factor(hypotheses$Result,
+                               levels = c("Supported", "Marginal", "Not supported"))
+  hypotheses$Hypothesis <- factor(hypotheses$Hypothesis,
+                                   levels = rev(paste0("H", 1:12)))
+
+  p <- ggplot(hypotheses, aes(x = Hypothesis, y = Beta)) +
+    geom_col(aes(fill = Result), width = 0.7) +
+    geom_text(aes(label = sprintf("p = %.3f", p_value)),
+              hjust = ifelse(hypotheses$Beta >= 0, -0.1, 1.1), size = 3.5) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    coord_flip() +
+    scale_fill_manual(
+      values = c("Supported" = "#2E8B57", "Marginal" = "#E69500", "Not supported" = "gray70"),
+      name = NULL
+    ) +
+    labs(
+      title = "Hypothesis Testing Results",
+      subtitle = "Standardized path coefficients with p-values",
+      x = NULL,
+      y = "Standardized Beta"
+    ) +
+    theme(
+      plot.title = element_text(face = "bold"),
+      legend.position = "bottom"
+    )
+
+  ggsave("figures/hypothesis_results.png", p, width = 10, height = 6, dpi = 150, bg = "white")
+  cat("Saved: figures/hypothesis_results.png\n")
+}
+
+# ------------------------------------------------------------------------------
 # Run all
 # ------------------------------------------------------------------------------
 
@@ -205,6 +381,12 @@ if (!interactive()) {
 
   cat("\nGenerating correlation matrices...\n")
   generate_correlation_matrices()
+
+  cat("\nGenerating path coefficients...\n")
+  generate_path_coefficients()
+
+  cat("\nGenerating hypothesis results...\n")
+  generate_hypothesis_results()
 
   cat("\nDone!\n")
 }
