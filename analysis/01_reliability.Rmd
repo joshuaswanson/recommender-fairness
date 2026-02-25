@@ -183,7 +183,7 @@ ggplot(all_items, aes(x = reorder(item, item_total_cor), y = item_total_cor)) +
   facet_wrap(~construct, scales = "free_y", ncol = 2) +
   coord_flip() +
   scale_fill_manual(
-    values = c("TRUE" = "coral", "FALSE" = "steelblue"),
+    values = c("TRUE" = "firebrick", "FALSE" = "steelblue"),
     labels = c("TRUE" = "Below threshold", "FALSE" = "Acceptable"),
     name = "Status"
   ) +

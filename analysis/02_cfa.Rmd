@@ -147,7 +147,7 @@ ggplot(loadings, aes(x = reorder(item, loading), y = loading)) +
   facet_wrap(~construct_label, scales = "free_y", ncol = 2) +
   coord_flip() +
   scale_fill_manual(
-    values = c("TRUE" = "coral", "FALSE" = "steelblue"),
+    values = c("TRUE" = "firebrick", "FALSE" = "steelblue"),
     labels = c("TRUE" = "Below 0.4", "FALSE" = "Acceptable"),
     name = "Status"
   ) +
