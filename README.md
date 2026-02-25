@@ -86,6 +86,11 @@ The core fairness hypotheses were not supported:
 
 The below-threshold CFI/TLI values suggest the model structure may need refinement, though RMSEA and SRMR are acceptable.
 
+- **CFI** (Comparative Fit Index): Compares the specified model against a baseline (null) model in which all observed variables are uncorrelated. Values range from 0 to 1, with >= 0.90 indicating acceptable fit.
+- **TLI** (Tucker-Lewis Index): Similar to CFI but includes a penalty for model complexity, rewarding parsimony. Also ranges from 0 to 1 with a >= 0.90 threshold.
+- **RMSEA** (Root Mean Square Error of Approximation): Estimates the amount of error per degree of freedom, quantifying how well the model would fit the population covariance matrix. Values <= 0.08 indicate acceptable fit; <= 0.05 indicates close fit.
+- **SRMR** (Standardized Root Mean Square Residual): Measures the average discrepancy between observed correlations and those predicted by the model. Values <= 0.08 indicate acceptable fit.
+
 ### Path Coefficients
 
 ![Path Coefficients](figures/path_coefficients.png)
@@ -114,6 +119,39 @@ The below-threshold CFI/TLI values suggest the model structure may need refineme
 
 We also tested a modified version combining Perceived Ease of Use and Perceived Usefulness into a single "Perceived Effectiveness" construct (6 constructs instead of 7). This model did not converge, so results are not reported.
 
+## Post-Hoc Analysis
+
+Post-hoc analyses were conducted to investigate the sources of below-threshold model fit and to test a theoretically motivated alternative specification. Code is in `analysis/04_modification_indices.R`.
+
+### Modification Indices and Method Factor
+
+Lavaan's modification indices identify which additions to the model would most improve fit. The largest modification indices are all error covariances between reverse-coded items (e.g., Q31~~Q37, MI = 49.4; Q37~~Q42, MI = 35.2; Q31~~Q42, MI = 32.6). These negatively-worded questions are more correlated with each other than the model expects, not because they measure the same construct, but because respondents tend to answer negatively-phrased items in a similar way regardless of content.
+
+Adding an orthogonal method factor for the five reverse-coded items still in the model (Q2, Q7, Q31, Q37, Q42) improves fit while leaving the structural path estimates essentially unchanged:
+
+| Index | Original | With Method Factor | Change |
+| ----- | -------- | ------------------ | ------ |
+| CFI   | 0.833    | 0.865              | +0.032 |
+| TLI   | 0.819    | 0.852              | +0.034 |
+| RMSEA | 0.062    | 0.056              | -0.006 |
+| SRMR  | 0.061    | 0.057              | -0.003 |
+
+The fairness paths remain non-significant under the method factor model ($\beta$ = 0.053, p = 0.231 for Perceived Fairness -> Perceived Usefulness; $\beta$ = -0.012, p = 0.790 for Perceived Fairness -> Attitude Toward Use), confirming that the null result is not an artifact of poor model fit. The below-threshold CFI/TLI values reflect a survey design artifact (shared method variance from reverse-coded item wording) rather than substantive model misspecification.
+
+### Direct Perceived Usefulness -> Behavioral Intention Path
+
+The original TAM (Davis, 1989) includes a direct path from Perceived Usefulness to Behavioral Intention, which the FAIR model omits by routing all effects through Attitude Toward Use. Modification indices also flagged this path (MI = 39.8). However, adding this path produced a model with identification problems: the information matrix could not be inverted, and standard errors were not computable. This is likely because Attitude Toward Use already predicts Behavioral Intention at the boundary ($\beta$ = 1.000), leaving no identifiable variance for a second predictor to explain. The original FAIR model specification is therefore retained.
+
+## Limitations
+
+Several methodological factors may constrain the interpretability of the null fairness results and should be considered before concluding that perceived fairness plays no role in user adoption of two-sided recommender systems.
+
+**Survivorship bias.** All participants had at least six months of active TikTok use, meaning the sample consists exclusively of users who have already adopted the platform. Users who perceived algorithmic unfairness and discontinued use as a result are systematically excluded. The dependent variable (behavioral intention to continue use) therefore captures retention among a self-selected population rather than initial adoption, which may attenuate any fairness effect that operates primarily at the adoption stage.
+
+**Construct operationalization.** The Perceived Fairness construct (Q16-Q23) is operationalized narrowly around whether recommendations are limited by demographic characteristics such as age, gender, or ethnicity. However, fairness concerns on algorithmic platforms may manifest through other dimensions not captured by these items, including algorithmic transparency, content creator compensation equity, filter bubble effects, or equal visibility of content. If users' fairness perceptions operate through these alternative dimensions, the current instrument would fail to detect them.
+
+**Platform selection.** TikTok's recommendation algorithm is driven primarily by behavioral signals (watch time, replays, shares) rather than explicit demographic targeting. Users may not perceive demographic-based unfairness on TikTok because the platform's recommendation logic does not make demographic factors salient. Platforms where unfairness is more visible to users, such as gig economy marketplaces, job recommendation systems, or content monetization platforms, may yield substantively different results.
+
 ## Repo Structure
 
 ```
@@ -125,6 +163,7 @@ analysis/
   01_reliability.Rmd      Step 1: Internal reliability analysis
   02_cfa.Rmd              Step 2: Confirmatory Factor Analysis
   03_sem.Rmd              Step 3: Structural Equation Modeling
+  04_modification_indices.R  Post-hoc modification indices analysis
   generate_figures.R      Script to regenerate all figures
 
 figures/
