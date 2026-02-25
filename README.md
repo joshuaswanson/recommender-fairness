@@ -75,8 +75,6 @@ The core fairness hypotheses were not supported:
 
 ### Model Fit
 
-![Model Fit](figures/model_fit.png)
-
 | Index | Value | Threshold | Status |
 | ----- | ----- | --------- | ------ |
 | CFI   | 0.833 | >= 0.90   | Below  |
@@ -170,7 +168,6 @@ figures/
   fair_model.png               FAIR model diagram with path coefficients
   path_coefficients.png        Bar chart of all path coefficients with 95% CIs
   hypothesis_results.png       Hypothesis testing summary
-  model_fit.png                Model fit indices comparison
   construct_correlations.png   Inter-construct correlation matrix
   *_correlation.png            Item correlation matrices for each construct
 
